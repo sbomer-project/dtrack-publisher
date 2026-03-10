@@ -1,5 +1,7 @@
 package org.jboss.sbomer.dtrack.publisher.core.service;
 
+import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.PUBLISHED_URL_KEY;
+
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -21,8 +23,6 @@ import org.jboss.sbomer.dtrack.publisher.core.port.spi.SBOMDownloader;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
-
-import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.PUBLISHED_URL_KEY;
 
 @ApplicationScoped
 @Slf4j
