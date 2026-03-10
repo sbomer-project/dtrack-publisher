@@ -18,6 +18,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.WebApplicationException;
 import lombok.extern.slf4j.Slf4j;
 
+import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.*;
+
 @ApplicationScoped
 @Slf4j
 public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
@@ -42,21 +44,49 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
     public Map<String, String> uploadSbom(
             PublishingTask.Target target,
             Path sbomFile,
-            PublishingTask.PublisherConfig publisherConfig) {
+            PublishingTask.PublisherConfig publisherConfig,
+            Map<String, String> handlerOptions) {
 
-        Map<String, String> options = publisherConfig.options() != null ?
+        // Safely get the global publisher options map
+        Map<String, String> pubOptions = publisherConfig.options() != null ?
                 publisherConfig.options() : new HashMap<>();
 
-        SBOMIdentityExtractor.ProjectIdentity identity = SBOMIdentityExtractor.extract(sbomFile);
+        // Ensure handlerOptions isn't null
+        Map<String, String> genOptions = handlerOptions != null ?
+                handlerOptions : new HashMap<>();
 
-        String projectName = options.get("projectName");
-        if (projectName == null) {
-            projectName = identity.name() != null ? identity.name() : target.identifier();
+        // --- DYNAMIC RESOLUTION (ATOMIC PAIRS) ---
+
+        String projectName;
+        String projectVersion;
+
+        // 1. Try Generation-level Handler Options (Must have both)
+        if (genOptions.containsKey(HANDLER_PROJECT_NAME_KEY) && genOptions.containsKey(HANDLER_PROJECT_VERSION_KEY)) {
+            projectName = genOptions.get(HANDLER_PROJECT_NAME_KEY);
+            projectVersion = genOptions.get(HANDLER_PROJECT_VERSION_KEY);
+            log.debug("Resolved D-Track identity from Generation Handler Options");
         }
+        // 2. Fallback to Batch-level Publisher Options (Must have both)
+        else if (pubOptions.containsKey(PUBLISHER_PROJECT_NAME_KEY) && pubOptions.containsKey(PUBLISHER_PROJECT_VERSION_KEY)) {
+            projectName = pubOptions.get(PUBLISHER_PROJECT_NAME_KEY);
+            projectVersion = pubOptions.get(PUBLISHER_PROJECT_VERSION_KEY);
+            log.debug("Resolved D-Track identity from Batch Publisher Options");
+        }
+        // 3. Lazy-load fallback: Only parse the file if we absolutely have to!
+        else {
+            log.debug("Identity not provided in options. Falling back to physical SBOM extraction... (name and version of SBOM)");
+            SBOMIdentityExtractor.ProjectIdentity identity = SBOMIdentityExtractor.extract(sbomFile);
 
-        String projectVersion = options.get("projectVersion");
-        if (projectVersion == null) {
-            projectVersion = identity.version() != null ? identity.version() : target.type();
+            if (identity.name() != null && identity.version() != null) {
+                projectName = identity.name();
+                projectVersion = identity.version();
+                log.debug("Resolved D-Track identity from physical SBOM file metadata");
+            } else {
+                // Absolute Fallback
+                projectName = target.identifier();
+                projectVersion = target.type();
+                log.debug("Resolved D-Track identity from Target fallback");
+            }
         }
 
         log.debug("Uploading to D-Track - Project: {}, Version: {}", projectName, projectVersion);
@@ -74,16 +104,16 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
             metadata.put("dtrack.projectName", projectName);
             metadata.put("dtrack.projectVersion", projectVersion);
 
-            // 1. Construct the deterministic Lookup URL and encode the variables safely
+            // Construct the deterministic Lookup URL and encode the variables safely
             String lookupUrl = String.format("%s/api/v1/project/lookup?name=%s&version=%s",
                     dtrackApiUrl,
                     URLEncoder.encode(projectName, StandardCharsets.UTF_8),
                     URLEncoder.encode(projectVersion, StandardCharsets.UTF_8));
 
             // The Core Domain is already looking for this exact key to populate publishedSbomUrls!
-            metadata.put("projectUrl", lookupUrl);
+            metadata.put(PUBLISHED_URL_KEY, lookupUrl);
 
-            // 2. Extract the token and construct the clickable/usable Token Status URL
+            // Extract the token and construct the clickable/usable Token Status URL
             if (response != null && response.containsKey("token")) {
                 String token = response.get("token");
                 metadata.put("dtrack.processingToken", token);
