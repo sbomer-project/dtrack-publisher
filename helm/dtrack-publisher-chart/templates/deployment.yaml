@@ -51,8 +51,12 @@ spec:
               value: {{ .Values.config.dtrack.apiUrl | quote }}
             - name: MANIFEST_STORAGE_INTERNAL_URL
               value: {{ .Values.config.storage.internalUrl | quote }}
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: {{ .Values.config.otel.endpoint | quote }}
+            - name: QUARKUS_OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.config.otel.endpoint }}
+            - name: QUARKUS_OTEL_EXPORTER_OTLP_PROTOCOL
+              value: {{ .Values.config.otel.protocol }}
+            - name: QUARKUS_OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=sbomer-dtrack-publisher"
 
             # Reference the API key from the existing cluster secret
             - name: DTRACK_API_KEY

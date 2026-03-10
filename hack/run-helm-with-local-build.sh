@@ -132,6 +132,7 @@ helm upgrade --install sbomer-release "./$PLATFORM_DIR" \
     --set global.includeS3=true \
     --set global.includeOtelLgtm=true \
     --set global.includeDependencyTrack=true \
+    --set global.includeDependencyTrackPublisher=true \
     --set dtrack-publisher-chart.image.repository=localhost/dtrack-publisher \
     --set dtrack-publisher-chart.image.tag=latest \
     --set dtrack-publisher-chart.image.pullPolicy=Never
