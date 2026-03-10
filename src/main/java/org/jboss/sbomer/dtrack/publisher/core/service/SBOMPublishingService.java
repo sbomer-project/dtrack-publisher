@@ -22,6 +22,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 
+import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.PUBLISHED_URL_KEY;
+
 @ApplicationScoped
 @Slf4j
 public class SBOMPublishingService implements SBOMPublishProcessor {
@@ -55,12 +57,13 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
                     String urlPath = originalUri.getPath();
 
                     // Safely combine the internal base URL and the path
+                    // We do this to have explicit control over the URL base that hosts the SBOM
                     String baseUrl = internalStorageUrl.endsWith("/") ?
                             internalStorageUrl.substring(0, internalStorageUrl.length() - 1) : internalStorageUrl;
                     String internalDownloadUrl = baseUrl + urlPath;
                     // -----------------------------
 
-                    log.debug("Translating public SBOM URL {} to internal cluster URL: {}", sbomUrl, internalDownloadUrl);
+                    log.debug("Translating SBOM Storage URL {} to URL: {}", sbomUrl, internalDownloadUrl);
 
                     // Pass the internal URL to the downloader
                     tempSbomFile = sbomDownloader.downloadSbom(internalDownloadUrl);
@@ -69,11 +72,15 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
                     Map<String, String> uploadResult = dependencyTrackUploader.uploadSbom(
                             generation.target(),
                             tempSbomFile,
-                            task.publisher()
+                            task.publisher(),
+                            generation.handlerOptions()
                     );
 
-                    if (uploadResult.containsKey("projectUrl")) {
-                        publishedUrls.add(uploadResult.get("projectUrl"));
+                    // We expect a certain key-value pair to be returned representing the published url
+                    // to access the SBOM from the published platform
+                    // If it exists we put it in publishedUrls
+                    if (uploadResult.containsKey(PUBLISHED_URL_KEY)) {
+                        publishedUrls.add(uploadResult.get(PUBLISHED_URL_KEY));
                     }
                     aggregatedMetadata.putAll(uploadResult);
 

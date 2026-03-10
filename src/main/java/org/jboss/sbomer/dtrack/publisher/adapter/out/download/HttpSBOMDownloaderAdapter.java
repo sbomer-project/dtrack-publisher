@@ -23,7 +23,6 @@ public class HttpSBOMDownloaderAdapter implements SBOMDownloader {
     private final HttpClient httpClient;
 
     public HttpSBOMDownloaderAdapter() {
-        // It is best practice to reuse a single HttpClient instance across the application
         this.httpClient = HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(10))
                 .followRedirects(HttpClient.Redirect.NORMAL)
@@ -37,20 +36,20 @@ public class HttpSBOMDownloaderAdapter implements SBOMDownloader {
         Path tempFile = null;
         
         try {
-            // 1. Create a temporary file on the OS
+            // Create a temporary file on the OS
             tempFile = Files.createTempFile("sbomer-download-", ".json");
 
-            // 2. Build the HTTP GET Request
+            // Build the HTTP GET Request
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .GET()
                     .timeout(Duration.ofMinutes(2)) // Give it plenty of time for massive 100MB+ files
                     .build();
 
-            // 3. Execute the request and stream straight to the file
+            // Execute the request and stream straight to the file
             HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tempFile));
 
-            // 4. Check for success
+            // Check for success
             if (response.statusCode() >= 200 && response.statusCode() < 300) {
                 log.debug("Successfully downloaded SBOM to temp file: {}", tempFile.toAbsolutePath());
                 return response.body();

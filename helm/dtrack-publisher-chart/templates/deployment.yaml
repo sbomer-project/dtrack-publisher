@@ -40,6 +40,28 @@ spec:
           {{- end }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          # --- INJECTED APPLICATION ENVIRONMENT VARIABLES ---
+          env:
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ .Values.config.kafka.bootstrapServers | quote }}
+            - name: SCHEMA_REGISTRY_URL
+              value: {{ .Values.config.kafka.schemaRegistryUrl | quote }}
+            - name: DTRACK_API_URL
+              value: {{ .Values.config.dtrack.apiUrl | quote }}
+            - name: MANIFEST_STORAGE_INTERNAL_URL
+              value: {{ .Values.config.storage.internalUrl | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.config.otel.endpoint | quote }}
+
+            # Reference the API key from the existing cluster secret
+            - name: DTRACK_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.name | quote }}
+                  key: {{ .Values.secret.keyName | quote }}
+          # --------------------------------------------------
+
           ports:
             - name: http
               containerPort: {{ .Values.service.port }}

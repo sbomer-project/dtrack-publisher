@@ -18,7 +18,8 @@ public record PublishingTask(
     public record GenerationResult(
             String generationId,
             Target target,
-            List<String> finalSbomUrls
+            List<String> finalSbomUrls,
+            Map<String, String> handlerOptions // Add this!
     ) {}
 
     public record Target(

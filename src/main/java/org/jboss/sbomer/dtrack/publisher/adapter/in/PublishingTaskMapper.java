@@ -74,10 +74,20 @@ public class PublishingTaskMapper {
                 .map(String::valueOf)
                 .toList();
 
+        // Map the handlerProvidedOptions just like the publisher options
+        Map<String, String> handlerOptions = Optional.ofNullable(req.getHandlerProvidedOptions())
+                .orElse(Collections.emptyMap())
+                .entrySet().stream()
+                .collect(Collectors.toMap(
+                        e -> String.valueOf(e.getKey()),
+                        e -> String.valueOf(e.getValue())
+                ));
+
         return new PublishingTask.GenerationResult(
                 String.valueOf(req.getGenerationId()),
                 target,
-                urls
+                urls,
+                handlerOptions
         );
     }
 }

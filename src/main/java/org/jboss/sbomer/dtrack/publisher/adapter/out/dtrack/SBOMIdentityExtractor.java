@@ -8,6 +8,8 @@ import com.fasterxml.jackson.core.JsonToken;
 
 import lombok.extern.slf4j.Slf4j;
 
+// We only use this as fallback to get a project name and version to publish directly from within the SBOM
+// Mainly uses name and version of the SBOM and supports both CycloneDX and SPDX
 @Slf4j
 public class SBOMIdentityExtractor {
 

@@ -12,11 +12,13 @@ public interface DependencyTrackUploader {
      * @param target The build or image target.
      * @param sbomFile The path to the local SBOM file.
      * @param publisherConfig The config that might contain specific D-Track options.
+     * @param handlerOptions Options passed for an individual generation through a Handler component
      * @return A map of resulting metadata.
      */
     Map<String, String> uploadSbom(
             PublishingTask.Target target,
             Path sbomFile,
-            PublishingTask.PublisherConfig publisherConfig
+            PublishingTask.PublisherConfig publisherConfig,
+            Map<String, String> handlerOptions
     );
 }
