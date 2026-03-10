@@ -1,5 +1,7 @@
 package org.jboss.sbomer.dtrack.publisher.adapter.out.dtrack;
 
+import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.*;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -17,8 +19,6 @@ import org.jboss.sbomer.dtrack.publisher.core.port.spi.DependencyTrackUploader;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.WebApplicationException;
 import lombok.extern.slf4j.Slf4j;
-
-import static org.jboss.sbomer.dtrack.publisher.core.ApplicationConstants.*;
 
 @ApplicationScoped
 @Slf4j
