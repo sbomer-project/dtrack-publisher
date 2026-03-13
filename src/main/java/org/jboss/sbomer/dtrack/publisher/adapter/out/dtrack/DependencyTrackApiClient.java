@@ -13,7 +13,7 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
-@Path("/api/v1/sbom")
+@Path("/api/v1/bom")
 @RegisterRestClient(configKey = "dtrack-api")
 public interface DependencyTrackApiClient {
 
@@ -25,6 +25,6 @@ public interface DependencyTrackApiClient {
             @RestForm("projectName") String projectName,
             @RestForm("projectVersion") String projectVersion,
             @RestForm("autoCreate") boolean autoCreate,
-            @RestForm("upload") File file
+            @RestForm("bom") File file
     );
 }

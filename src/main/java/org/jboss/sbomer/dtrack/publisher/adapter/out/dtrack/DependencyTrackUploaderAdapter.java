@@ -31,7 +31,6 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
     public DependencyTrackUploaderAdapter(
             @RestClient DependencyTrackApiClient apiClient,
             @ConfigProperty(name = "dtrack.api.key") String dtrackApiKey,
-            // Injecting the base URL you configured in application.properties
             @ConfigProperty(name = "dtrack-api/mp-rest/url") String dtrackApiUrl) {
         this.apiClient = apiClient;
         this.dtrackApiKey = dtrackApiKey;
@@ -47,34 +46,25 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
             PublishingTask.PublisherConfig publisherConfig,
             Map<String, String> handlerOptions) {
 
-        // Safely get the global publisher options map
         Map<String, String> pubOptions = publisherConfig.options() != null ?
                 publisherConfig.options() : new HashMap<>();
 
-        // Ensure handlerOptions isn't null
         Map<String, String> genOptions = handlerOptions != null ?
                 handlerOptions : new HashMap<>();
-
-        // --- DYNAMIC RESOLUTION (ATOMIC PAIRS) ---
 
         String projectName;
         String projectVersion;
 
-        // 1. Try Generation-level Handler Options (Must have both)
         if (genOptions.containsKey(HANDLER_PROJECT_NAME_KEY) && genOptions.containsKey(HANDLER_PROJECT_VERSION_KEY)) {
             projectName = genOptions.get(HANDLER_PROJECT_NAME_KEY);
             projectVersion = genOptions.get(HANDLER_PROJECT_VERSION_KEY);
             log.debug("Resolved D-Track identity from Generation Handler Options");
-        }
-        // 2. Fallback to Batch-level Publisher Options (Must have both)
-        else if (pubOptions.containsKey(PUBLISHER_PROJECT_NAME_KEY) && pubOptions.containsKey(PUBLISHER_PROJECT_VERSION_KEY)) {
+        } else if (pubOptions.containsKey(PUBLISHER_PROJECT_NAME_KEY) && pubOptions.containsKey(PUBLISHER_PROJECT_VERSION_KEY)) {
             projectName = pubOptions.get(PUBLISHER_PROJECT_NAME_KEY);
             projectVersion = pubOptions.get(PUBLISHER_PROJECT_VERSION_KEY);
             log.debug("Resolved D-Track identity from Batch Publisher Options");
-        }
-        // 3. Lazy-load fallback: Only parse the file if we absolutely have to!
-        else {
-            log.debug("Identity not provided in options. Falling back to physical SBOM extraction... (name and version of SBOM)");
+        } else {
+            log.debug("Identity not provided in options. Falling back to physical SBOM extraction...");
             SBOMIdentityExtractor.ProjectIdentity identity = SBOMIdentityExtractor.extract(sbomFile);
 
             if (identity.name() != null && identity.version() != null) {
@@ -82,14 +72,13 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
                 projectVersion = identity.version();
                 log.debug("Resolved D-Track identity from physical SBOM file metadata");
             } else {
-                // Absolute Fallback
                 projectName = target.identifier();
                 projectVersion = target.type();
                 log.debug("Resolved D-Track identity from Target fallback");
             }
         }
 
-        log.debug("Uploading to D-Track - Project: {}, Version: {}", projectName, projectVersion);
+        log.info("Uploading SBOM to D-Track - Project: '{}', Version: '{}'", projectName, projectVersion);
 
         try {
             Map<String, String> response = apiClient.uploadSbom(
@@ -104,32 +93,43 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
             metadata.put("dtrack.projectName", projectName);
             metadata.put("dtrack.projectVersion", projectVersion);
 
-            // Construct the deterministic Lookup URL and encode the variables safely
             String lookupUrl = String.format("%s/api/v1/project/lookup?name=%s&version=%s",
                     dtrackApiUrl,
                     URLEncoder.encode(projectName, StandardCharsets.UTF_8),
                     URLEncoder.encode(projectVersion, StandardCharsets.UTF_8));
-
-            // The Core Domain is already looking for this exact key to populate publishedSbomUrls!
             metadata.put(PUBLISHED_URL_KEY, lookupUrl);
 
-            // Extract the token and construct the clickable/usable Token Status URL
             if (response != null && response.containsKey("token")) {
                 String token = response.get("token");
                 metadata.put("dtrack.processingToken", token);
 
-                String tokenUrl = String.format("%s/api/v1/bom/token/%s", dtrackApiUrl, token);
-                // This goes into the extra metadata (the `result` map in your Avro schema)
+                String tokenUrl = String.format("%s/api/v1/event/token/%s", dtrackApiUrl, token);
                 metadata.put("dtrack.tokenUrl", tokenUrl);
+
+                log.info("Successfully submitted SBOM to D-Track. Tracking token: {}", token);
             }
 
             return metadata;
 
         } catch (WebApplicationException e) {
+            // This catches clean HTTP errors (e.g., server stayed connected and replied with a 400 or 403)
             int status = e.getResponse().getStatus();
-            String errorBody = e.getResponse().readEntity(String.class);
-            log.error("Dependency-Track API rejected the upload. Status: {}, Body: {}", status, errorBody);
-            throw new DTrackUploadException(String.valueOf(status), "D-Track API error: " + errorBody, e);
+            String errorBody = "No body provided";
+            try {
+                errorBody = e.getResponse().readEntity(String.class);
+            } catch (Exception ignored) {
+                // Ignore if body is unreadable
+            }
+            log.error("Dependency-Track API cleanly rejected the upload. Status: {}, Body: {}", status, errorBody);
+            throw new DTrackUploadException(String.valueOf(status), "D-Track API rejected upload: " + errorBody, e);
+
+        } catch (Exception e) {
+            // This catches Broken Pipes, Vert.x StreamResetExceptions, and connection timeouts
+            log.error("Network or IO error while streaming SBOM to Dependency-Track. " +
+                    "A 'Stream reset' or 'Broken pipe' during an upload usually means the server or reverse proxy " +
+                    "(like Nginx) forcefully closed the connection. Check your API Key permissions (needs BOM_UPLOAD " +
+                    "and PROJECT_CREATION_UPLOAD) and check your proxy's max body size limits.", e);
+            throw new DTrackUploadException("IO_ERROR", "Upload stream interrupted by server: " + e.getMessage(), e);
         }
     }
 }
