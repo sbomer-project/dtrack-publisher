@@ -64,6 +64,7 @@ public class KafkaPublishFinishedEmitterAdapter implements PublishFinishedEmitte
         // Create a standard context for the event
         ContextSpec context = ContextSpec.newBuilder()
                 .setEventId(java.util.UUID.randomUUID().toString())
+                .setType("PublishFinished")
                 .setTimestamp(Instant.now())
                 .setSource(COMPONENT_NAME)
                 .build();
