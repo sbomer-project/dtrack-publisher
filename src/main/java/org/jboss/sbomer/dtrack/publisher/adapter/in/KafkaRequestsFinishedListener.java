@@ -9,6 +9,8 @@ import org.jboss.sbomer.dtrack.publisher.core.port.spi.FailureNotifier;
 import org.jboss.sbomer.dtrack.publisher.core.utility.FailureUtility;
 import org.jboss.sbomer.events.orchestration.RequestsFinished;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
@@ -37,6 +39,9 @@ public class KafkaRequestsFinishedListener {
         } catch (Exception e) {
             // Catch exceptions so we don't crash the consumer loop.
             log.error("Skipping malformed or incompatible event: {}", requestsFinished, e);
+            Span span = Span.current();
+            span.recordException(e);
+            span.setStatus(StatusCode.ERROR, e.getMessage());
             if (requestsFinished != null) {
                 failureNotifier.notify(FailureUtility.buildFailureSpecFromException(e), requestsFinished.getContext().getCorrelationId(), requestsFinished);
             } else {

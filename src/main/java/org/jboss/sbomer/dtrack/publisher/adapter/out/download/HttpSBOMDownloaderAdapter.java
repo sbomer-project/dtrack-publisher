@@ -13,6 +13,8 @@ import org.eclipse.microprofile.faulttolerance.Retry;
 import org.jboss.sbomer.dtrack.publisher.adapter.out.download.exception.SBOMDownloadException;
 import org.jboss.sbomer.dtrack.publisher.core.port.spi.SBOMDownloader;
 
+import io.opentelemetry.instrumentation.annotations.SpanAttribute;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
 import lombok.extern.slf4j.Slf4j;
 
@@ -30,8 +32,9 @@ public class HttpSBOMDownloaderAdapter implements SBOMDownloader {
     }
 
     @Override
+    @WithSpan
     @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS)
-    public Path downloadSbom(String url) {
+    public Path downloadSbom(@SpanAttribute("sbom.url") String url) {
         log.debug("Downloading SBOM from URL: {}", url);
         Path tempFile = null;
         

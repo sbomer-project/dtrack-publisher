@@ -46,7 +46,7 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 Selector labels
 */}}
 {{- define "dtrack-publisher-chart.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "dtrack-publisher-chart.name" . }}
+app.kubernetes.io/name: sbomer-dtrack-publisher
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
