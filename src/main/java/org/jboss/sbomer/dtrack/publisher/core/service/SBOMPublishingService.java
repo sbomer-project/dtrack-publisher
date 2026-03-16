@@ -20,6 +20,9 @@ import org.jboss.sbomer.dtrack.publisher.core.port.spi.DependencyTrackUploader;
 import org.jboss.sbomer.dtrack.publisher.core.port.spi.PublishFinishedEmitter;
 import org.jboss.sbomer.dtrack.publisher.core.port.spi.SBOMDownloader;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
@@ -40,9 +43,11 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
     String internalStorageUrl;
 
     @Override
+    @WithSpan
     public void publishSBOMs(PublishingTask task) {
+        Span span = Span.current();
+        span.setAttribute("request.id", task.requestId());
         log.info("Starting Dependency-Track publishing for Request ID: {}", task.requestId());
-
         List<String> publishedUrls = new ArrayList<>();
         List<PublishFinishedResult.FailedPublish> failures = new ArrayList<>();
         Map<String, String> aggregatedMetadata = new HashMap<>();
@@ -85,6 +90,8 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
                     aggregatedMetadata.putAll(uploadResult);
 
                 } catch (Exception e) {
+                    span.recordException(e);
+                    span.setStatus(StatusCode.ERROR, e.getMessage());
                     // CATCH AND RECORD, DO NOT THROW
                     // We log and record the ORIGINAL sbomUrl so the orchestrator recognizes it!
                     log.error("Failed to publish SBOM from URL: {}", sbomUrl, e);

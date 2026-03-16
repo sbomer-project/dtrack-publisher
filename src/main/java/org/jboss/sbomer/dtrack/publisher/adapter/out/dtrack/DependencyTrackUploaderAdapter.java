@@ -16,6 +16,8 @@ import org.jboss.sbomer.dtrack.publisher.adapter.out.dtrack.exception.DTrackUplo
 import org.jboss.sbomer.dtrack.publisher.core.domain.PublishingTask;
 import org.jboss.sbomer.dtrack.publisher.core.port.spi.DependencyTrackUploader;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.WebApplicationException;
 import lombok.extern.slf4j.Slf4j;
@@ -38,6 +40,7 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
     }
 
     @Override
+    @WithSpan
     @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS,
             abortOn = { IllegalArgumentException.class })
     public Map<String, String> uploadSbom(
@@ -77,6 +80,11 @@ public class DependencyTrackUploaderAdapter implements DependencyTrackUploader {
                 log.debug("Resolved D-Track identity from Target fallback");
             }
         }
+
+        Span span = Span.current();
+        span.setAttribute("dtrack.project.name", projectName);
+        span.setAttribute("dtrack.project.version", projectVersion);
+        span.setAttribute("target.identifier", target.identifier());
 
         log.info("Uploading SBOM to D-Track - Project: '{}', Version: '{}'", projectName, projectVersion);
 
