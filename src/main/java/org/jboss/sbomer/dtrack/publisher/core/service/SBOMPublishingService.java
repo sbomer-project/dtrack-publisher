@@ -10,7 +10,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.sbomer.dtrack.publisher.adapter.out.download.exception.SBOMDownloadException;
 import org.jboss.sbomer.dtrack.publisher.adapter.out.dtrack.exception.DTrackUploadException;
 import org.jboss.sbomer.dtrack.publisher.core.domain.PublishFinishedResult;
@@ -38,10 +37,6 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
     @Inject
     PublishFinishedEmitter publishFinishedEmitter;
 
-    // Inject the internal storage URL
-    @ConfigProperty(name = "manifest.storage.internal.url")
-    String internalStorageUrl;
-
     @Override
     @WithSpan
     public void publishSBOMs(PublishingTask task) {
@@ -61,17 +56,10 @@ public class SBOMPublishingService implements SBOMPublishProcessor {
                     URI originalUri = URI.create(sbomUrl);
                     String urlPath = originalUri.getPath();
 
-                    // Safely combine the internal base URL and the path
-                    // We do this to have explicit control over the URL base that hosts the SBOM
-                    String baseUrl = internalStorageUrl.endsWith("/") ?
-                            internalStorageUrl.substring(0, internalStorageUrl.length() - 1) : internalStorageUrl;
-                    String internalDownloadUrl = baseUrl + urlPath;
-                    // -----------------------------
+                    log.debug("Downloading SBOM from path: {}", urlPath);
 
-                    log.debug("Translating SBOM Storage URL {} to URL: {}", sbomUrl, internalDownloadUrl);
-
-                    // Pass the internal URL to the downloader
-                    tempSbomFile = sbomDownloader.downloadSbom(internalDownloadUrl);
+                    // Pass the path to the downloader (base URL is configured on the REST client)
+                    tempSbomFile = sbomDownloader.downloadSbom(urlPath);
 
                     log.debug("Uploading SBOM to Dependency-Track for target: {}", generation.target().identifier());
                     Map<String, String> uploadResult = dependencyTrackUploader.uploadSbom(
