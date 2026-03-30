@@ -4,6 +4,7 @@ import java.io.InputStream;
 
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 
+import jakarta.ws.rs.Encoded;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
@@ -16,5 +17,5 @@ public interface ManifestStorageApiClient {
     @GET
     @Path("/{path:.+}")
     @Produces(MediaType.APPLICATION_OCTET_STREAM)
-    InputStream download(@PathParam("path") String path);
+    InputStream download(@PathParam("path") @Encoded String path);
 }
