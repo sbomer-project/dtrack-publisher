@@ -1,82 +1,85 @@
 package org.jboss.sbomer.dtrack.publisher.adapter.out.download;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.Duration;
+import java.nio.file.StandardCopyOption;
 import java.time.temporal.ChronoUnit;
 
 import org.eclipse.microprofile.faulttolerance.Retry;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.sbomer.dtrack.publisher.adapter.out.download.exception.SBOMDownloadException;
 import org.jboss.sbomer.dtrack.publisher.core.port.spi.SBOMDownloader;
 
+import io.opentelemetry.api.trace.Span;
+import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.instrumentation.annotations.SpanAttribute;
 import io.opentelemetry.instrumentation.annotations.WithSpan;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.ws.rs.WebApplicationException;
 import lombok.extern.slf4j.Slf4j;
 
 @ApplicationScoped
 @Slf4j
 public class HttpSBOMDownloaderAdapter implements SBOMDownloader {
 
-    private final HttpClient httpClient;
+    private final ManifestStorageApiClient storageClient;
 
-    public HttpSBOMDownloaderAdapter() {
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(10))
-                .followRedirects(HttpClient.Redirect.NORMAL)
-                .build();
+    public HttpSBOMDownloaderAdapter(@RestClient ManifestStorageApiClient storageClient) {
+        this.storageClient = storageClient;
     }
 
     @Override
     @WithSpan
     @Retry(maxRetries = 3, delay = 2, delayUnit = ChronoUnit.SECONDS)
-    public Path downloadSbom(@SpanAttribute("sbom.url") String url) {
-        log.debug("Downloading SBOM from URL: {}", url);
+    public Path downloadSbom(@SpanAttribute("sbom.path") String path) {
+        log.debug("Downloading SBOM from path: {}", path);
         Path tempFile = null;
-        
+
         try {
             // Create a temporary file on the OS
             tempFile = Files.createTempFile("sbomer-download-", ".json");
 
-            // Build the HTTP GET Request
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .GET()
-                    .timeout(Duration.ofMinutes(2)) // Give it plenty of time for massive 100MB+ files
-                    .build();
+            String cleanPath = path.startsWith("/") ? path.substring(1) : path;
 
-            // Execute the request and stream straight to the file
-            HttpResponse<Path> response = httpClient.send(request, HttpResponse.BodyHandlers.ofFile(tempFile));
-
-            // Check for success
-            if (response.statusCode() >= 200 && response.statusCode() < 300) {
-                log.debug("Successfully downloaded SBOM to temp file: {}", tempFile.toAbsolutePath());
-                return response.body();
-            } else {
-                // If the storage service returns a 404 or 500, we need to throw an error
-                log.error("Failed to download SBOM. HTTP Status: {}, URL: {}", response.statusCode(), url);
-                throw new SBOMDownloadException(String.valueOf(response.statusCode()), "Storage Service returned HTTP " + response.statusCode());
+            try (InputStream is = storageClient.download(cleanPath)) {
+                Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
             }
-            
+
+            log.debug("Successfully downloaded SBOM to temp file: {}", tempFile.toAbsolutePath());
+            return tempFile;
+
         } catch (Exception e) {
-            // If anything goes wrong (network drop, 404, etc.), we MUST clean up the empty temp file
-            if (tempFile != null) {
-                try {
-                    Files.deleteIfExists(tempFile);
-                } catch (Exception cleanupEx) {
-                    log.warn("Failed to clean up temp file after download failure: {}", tempFile, cleanupEx);
-                }
+            // Clean up temp file on error
+            cleanupTempFile(tempFile);
+
+            // Record error on span
+            Span span = Span.current();
+            span.recordException(e);
+            span.setStatus(StatusCode.ERROR, e.getMessage());
+
+            // Extract HTTP status from REST client errors
+            String errorCode = null;
+            if (e instanceof WebApplicationException wae) {
+                errorCode = String.valueOf(wae.getResponse().getStatus());
+                log.error("Storage Service rejected download request. Status: {}, Path: {}", errorCode, path);
             }
-            
+
             // Re-throw so the core domain registers this as a failure for this specific SBOM
             if (e instanceof SBOMDownloadException) {
                 throw (SBOMDownloadException) e;
             }
-            throw new SBOMDownloadException(null, "Network error while downloading SBOM: " + e.getMessage(), e);
+            throw new SBOMDownloadException(errorCode, "Error downloading SBOM: " + e.getMessage(), e);
+        }
+    }
+
+    private void cleanupTempFile(Path tempFile) {
+        if (tempFile != null) {
+            try {
+                Files.deleteIfExists(tempFile);
+            } catch (Exception cleanupEx) {
+                log.warn("Failed to clean up temp file after download failure: {}", tempFile, cleanupEx);
+            }
         }
     }
 }
