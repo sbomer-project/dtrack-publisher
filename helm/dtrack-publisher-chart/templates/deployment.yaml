@@ -64,6 +64,10 @@ spec:
                 secretKeyRef:
                   name: {{ .Values.secret.name | quote }}
                   key: {{ .Values.secret.keyName | quote }}
+
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           # --------------------------------------------------
 
           ports:
